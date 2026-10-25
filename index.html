@@ -1,30 +1,566 @@
-name: Gerar APK NTPlay Nomade
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NTPlay Nômade - Android TV</title>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  <style>
+    :root {
+      --bg-space: #070510;
+      --bg-nebula: #110d24;
+      --glass: rgba(37, 30, 66, 0.55);
+      --cyan: #00f0ff;
+      --purple: #8a2be2;
+      --magenta: #ff00a0;
+      --text-white: #f5f7fa;
+      --text-dim: #a09cb8;
+      --neon-grad: linear-gradient(135deg, var(--cyan), var(--purple), var(--magenta));
+    }
 
-on:
-  push:
-    branches: [ "main" ]
-  workflow_dispatch:
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', Roboto, Helvetica, sans-serif;
+      user-select: none;
+    }
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Baixar Codigo
-        uses: actions/checkout@v4
+    body {
+      background: radial-gradient(circle at 30% 20%, #1a103c 0%, var(--bg-space) 80%);
+      color: var(--text-white);
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+    }
 
-      - name: Configurar Java 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
+    .focusable {
+      outline: none;
+      transition: all 0.18s ease;
+      cursor: pointer;
+      border: 2px solid rgba(255, 255, 255, 0.08);
+    }
 
-      - name: Compilar APK Automaticamente
-        run: |
-          chmod +x gradlew
-          ./gradlew assembleDebug
+    .focusable:focus, .focusable:hover, .focusable.active-tab {
+      border-color: var(--cyan);
+      box-shadow: 0 0 18px rgba(0, 240, 255, 0.55), inset 0 0 10px rgba(255, 0, 160, 0.35);
+      transform: scale(1.02);
+      background: rgba(0, 240, 255, 0.14) !important;
+    }
 
-      - name: Disponibilizar APK para Download
-        uses: actions/upload-artifact@v4
-        with:
-          name: NTPlay-Nomade-TV-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+    .sidebar {
+      width: 260px;
+      background: rgba(9, 6, 20, 0.88);
+      border-right: 1px solid rgba(0, 240, 255, 0.2);
+      padding: 24px 16px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      backdrop-filter: blur(12px);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 28px;
+      padding: 6px;
+    }
+
+    .logo-circle {
+      width: 54px;
+      height: 54px;
+      border-radius: 50%;
+      background: var(--bg-nebula);
+      border: 2px solid var(--cyan);
+      box-shadow: 0 0 16px var(--cyan), inset 0 0 12px var(--magenta);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 900;
+      font-size: 24px;
+      color: var(--cyan);
+      text-shadow: 0 0 8px var(--cyan);
+    }
+
+    .brand-title {
+      font-size: 20px;
+      font-weight: 900;
+      letter-spacing: 1.5px;
+      background: var(--neon-grad);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .brand-sub {
+      font-size: 11px;
+      color: var(--text-dim);
+      letter-spacing: 3px;
+    }
+
+    .nav-btn {
+      width: 100%;
+      background: var(--glass);
+      color: var(--text-white);
+      padding: 14px 16px;
+      margin-bottom: 10px;
+      border-radius: 12px;
+      text-align: left;
+      font-size: 15px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .main-area {
+      flex: 1;
+      padding: 24px;
+      overflow-y: auto;
+      position: relative;
+    }
+
+    .section {
+      display: none;
+      height: 100%;
+    }
+
+    .section.active {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .live-grid {
+      display: grid;
+      grid-template-columns: 350px 1fr;
+      gap: 22px;
+      height: calc(100vh - 48px);
+    }
+
+    .channel-list {
+      overflow-y: auto;
+      padding-right: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .channel-item {
+      background: var(--glass);
+      padding: 14px;
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .ch-num {
+      font-size: 18px;
+      font-weight: 900;
+      color: var(--cyan);
+      min-width: 36px;
+    }
+
+    .ch-info {
+      flex: 1;
+    }
+
+    .ch-name {
+      font-weight: 700;
+      font-size: 15px;
+    }
+
+    .ch-epg {
+      font-size: 12px;
+      color: var(--text-dim);
+      margin-top: 3px;
+    }
+
+    .player-box {
+      background: #000;
+      border-radius: 18px;
+      border: 2px solid var(--cyan);
+      box-shadow: 0 0 30px rgba(138, 43, 226, 0.45);
+      overflow: hidden;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      height: 72%;
+    }
+
+    video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .player-hud {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: linear-gradient(transparent, rgba(7, 5, 16, 0.95));
+      padding: 18px 22px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .vod-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(185px, 1fr));
+      gap: 18px;
+    }
+
+    .vod-card {
+      background: var(--glass);
+      border-radius: 16px;
+      padding: 12px;
+      text-align: center;
+    }
+
+    .vod-poster {
+      height: 210px;
+      border-radius: 12px;
+      background: linear-gradient(160deg, #1f1447, #090614);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 42px;
+      color: var(--cyan);
+      margin-bottom: 10px;
+      border: 1px solid rgba(0, 240, 255, 0.25);
+    }
+
+    .multiview-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: 1fr 1fr;
+      gap: 14px;
+      height: 82vh;
+    }
+
+    .mv-cell {
+      background: #000;
+      border-radius: 14px;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .input-box {
+      background: var(--bg-nebula);
+      color: var(--text-white);
+      border: 1px solid var(--cyan);
+      padding: 14px;
+      border-radius: 10px;
+      width: 100%;
+      font-size: 15px;
+      margin-bottom: 12px;
+    }
+
+    #epg-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(7, 5, 16, 0.86);
+      backdrop-filter: blur(10px);
+      z-index: 99;
+      padding: 40px;
+    }
+
+    #num-osd {
+      display: none;
+      position: fixed;
+      top: 28px;
+      right: 36px;
+      background: var(--bg-nebula);
+      border: 2px solid var(--cyan);
+      box-shadow: 0 0 20px var(--cyan);
+      padding: 12px 24px;
+      border-radius: 14px;
+      font-size: 28px;
+      font-weight: 900;
+      color: var(--cyan);
+      z-index: 100;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="num-osd">Canal: <span id="num-val"></span></div>
+
+  <aside class="sidebar">
+    <div>
+      <div class="brand">
+        <div class="logo-circle">N▶</div>
+        <div>
+          <div class="brand-title">NTPLAY</div>
+          <div class="brand-sub">NÔMADE TV</div>
+        </div>
+      </div>
+
+      <button class="nav-btn focusable active-tab" tabindex="0" onclick="openTab('live', this)">📺 TV Ao Vivo</button>
+      <button class="nav-btn focusable" tabindex="0" onclick="openTab('movies', this)">🎬 Filmes (VOD)</button>
+      <button class="nav-btn focusable" tabindex="0" onclick="openTab('series', this)">🍿 Séries</button>
+      <button class="nav-btn focusable" tabindex="0" onclick="openTab('multiview', this)">⊞ Tela Dividida (4x)</button>
+      <button class="nav-btn focusable" tabindex="0" onclick="openTab('providers', this)">⚙️ Adicionar Lista M3U</button>
+    </div>
+
+    <button class="nav-btn focusable" tabindex="0" onclick="toggleEpg()">📅 Guia EPG Transparente</button>
+  </aside>
+
+  <main class="main-area">
+    <section id="tab-live" class="section active">
+      <div class="live-grid">
+        <div class="channel-list" id="channel-container"></div>
+
+        <div style="display:flex; flex-direction:column; gap:16px;">
+          <div class="player-box">
+            <video id="tv-player" controls autoplay muted></video>
+            <div class="player-hud">
+              <div>
+                <div id="now-playing-title" style="font-size:20px; font-weight:800; color:var(--cyan);">Selecione um canal</div>
+                <div id="now-playing-epg" style="font-size:13px; color:var(--magenta);">Programação Ao Vivo • Timeshift 30m Ativo</div>
+              </div>
+              <button class="nav-btn focusable" style="width:auto; margin:0;" tabindex="0" onclick="goFullScreen()">⛶ Tela Cheia</button>
+            </div>
+          </div>
+
+          <div style="background:var(--glass); padding:16px; border-radius:14px; border:1px solid rgba(0,240,255,0.2);">
+            <strong style="color:var(--cyan);">💡 Dicas Rápidas do Controle Remoto:</strong>
+            <p style="font-size:13px; color:var(--text-dim); margin-top:4px;">
+              • Use as <b>Setas do Controle</b> para navegar e <b>Enter / OK</b> para assistir.<br>
+              • Digite os <b>números no controle remoto</b> (ex: 101, 102) para pular direto para o canal.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-movies" class="section">
+      <h2 style="color:var(--cyan);">🎬 Filmes em Destaque (Continuar Assistindo & 4K)</h2>
+      <div class="vod-grid" id="movies-container"></div>
+    </section>
+
+    <section id="tab-series" class="section">
+      <h2 style="color:var(--magenta);">🍿 Séries (Próximo Episódio Automático & OpenSubtitles)</h2>
+      <div class="vod-grid" id="series-container"></div>
+    </section>
+
+    <section id="tab-multiview" class="section">
+      <h2 style="color:var(--cyan);">⊞ Tela Dividida (Multi-View Simultâneo)</h2>
+      <div class="multiview-grid">
+        <div class="mv-cell focusable" tabindex="0"><span style="color:var(--cyan); font-weight:bold;">101 • NTPlay Esportes 4K (Áudio Ativo)</span></div>
+        <div class="mv-cell focusable" tabindex="0"><span>102 • Cine Nômade Action</span></div>
+        <div class="mv-cell focusable" tabindex="0"><span>103 • Docs & Natureza UHD</span></div>
+        <div class="mv-cell focusable" tabindex="0"><span>104 • Notícias 24h Ao Vivo</span></div>
+      </div>
+    </section>
+
+    <section id="tab-providers" class="section">
+      <h2 style="color:var(--cyan);">⚙️ Configurar Provedores (M3U, Xtream Codes, Stalker e Jellyfin)</h2>
+      <div style="background:var(--glass); padding:24px; border-radius:16px; max-width:720px;">
+        <h3 style="margin-bottom:12px;">Carregar sua própria Lista M3U (Funciona na hora!)</h3>
+        <input type="text" id="m3u-url" class="input-box focusable" placeholder="Cole aqui o link HTTP da sua lista .m3u ou .m3u8..." />
+        <button class="nav-btn focusable" style="background:var(--neon-grad); justify-content:center;" tabindex="0" onclick="loadCustomM3UUrl()">
+          🚀 Carregar Canais pelo Link M3U
+        </button>
+
+        <hr style="border-color:rgba(255,255,255,0.1); margin:20px 0;" />
+
+        <h3 style="margin-bottom:12px;">Ou escolha um arquivo .M3U salvo no seu aparelho:</h3>
+        <input type="file" id="m3u-file" accept=".m3u,.m3u8" class="input-box focusable" onchange="loadLocalM3UFile(event)" />
+      </div>
+    </section>
+  </main>
+
+  <div id="epg-overlay">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+      <h2 style="color:var(--cyan);">📅 Guia Completo EPG (Sobreposição Transparente)</h2>
+      <button class="nav-btn focusable" style="width:auto;" tabindex="0" onclick="toggleEpg()">✖ Fechar Guia</button>
+    </div>
+    <div id="epg-list" style="display:flex; flex-direction:column; gap:10px;"></div>
+  </div>
+
+  <script>
+    let channels = [
+      { number: 101, name: "NTPlay Esportes 4K", epg: "Final do Campeonato Ao Vivo", url: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8" },
+      { number: 102, name: "Cine Nômade Action HD", epg: "Sessão Cyberpunk (Legendado IA)", url: "https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8" },
+      { number: 103, name: "Natureza & Cosmos UHD", epg: "Explorando a Nebulosa - Ep. 04", url: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8" },
+      { number: 104, name: "Nômade News 24h", epg: "Jornal da Noite (Catch-up Disponível)", url: "https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8" }
+    ];
+
+    const movies = [
+      { title: "Horizonte Neon 2026", info: "2026 • ⭐ 9.2 • 4K HDR", url: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8" },
+      { title: "A Odisseia Nômade", info: "2026 • ⭐ 8.9 • Dublado", url: "https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8" },
+      { title: "Código Fantasma", info: "2025 • ⭐ 8.7 • Full HD", url: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8" },
+      { title: "Velocidade Orbital", info: "2026 • ⭐ 9.4 • IMAX", url: "https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8" }
+    ];
+
+    const series = [
+      { title: "Crônicas da Nebulosa", info: "T01:E05 • Continuar Assistindo", url: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8" },
+      { title: "Rede Oculta", info: "T02:E01 • Próximo Ep. Automático", url: "https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8" },
+      { title: "Fronteira Zero", info: "T03:E08 • 4K UHD", url: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8" }
+    ];
+
+    let hls = null;
+
+    function playStream(channel) {
+      const video = document.getElementById("tv-player");
+      document.getElementById("now-playing-title").innerText = `${channel.number} - ${channel.name}`;
+      document.getElementById("now-playing-epg").innerText = `${channel.epg} • Buffer Timeshift 30 min`;
+
+      if (Hls.isSupported() && channel.url.includes(".m3u8")) {
+        if (hls) hls.destroy();
+        hls = new Hls();
+        hls.loadSource(channel.url);
+        hls.attachMedia(video);
+        hls.on(Hls.Events.MANIFEST_PARSED, () => video.play().catch(() => {}));
+      } else {
+        video.src = channel.url;
+        video.play().catch(() => {});
+      }
+    }
+
+    function renderAll() {
+      const chBox = document.getElementById("channel-container");
+      const epgList = document.getElementById("epg-list");
+      chBox.innerHTML = "";
+      epgList.innerHTML = "";
+
+      channels.forEach((ch) => {
+        const div = document.createElement("div");
+        div.className = "channel-item focusable";
+        div.tabIndex = 0;
+        div.innerHTML = `
+          <div class="ch-num">${ch.number}</div>
+          <div class="ch-info">
+            <div class="ch-name">${ch.name}</div>
+            <div class="ch-epg">${ch.epg}</div>
+          </div>
+          <div style="color:var(--magenta);">★</div>
+        `;
+        div.onclick = () => playStream(ch);
+        div.onkeydown = (e) => { if (e.key === "Enter") playStream(ch); };
+        chBox.appendChild(div);
+
+        const epgRow = document.createElement("div");
+        epgRow.className = "channel-item";
+        epgRow.innerHTML = `<strong style="color:var(--cyan); width:220px;">${ch.number} - ${ch.name}</strong> <span style="flex:1;">Agora: ${ch.epg}</span> <span style="color:var(--text-dim);">A Seguir: Programação Nômade HD</span>`;
+        epgList.appendChild(epgRow);
+      });
+
+      const movBox = document.getElementById("movies-container");
+      movBox.innerHTML = "";
+      movies.forEach((m, i) => {
+        const card = document.createElement("div");
+        card.className = "vod-card focusable";
+        card.tabIndex = 0;
+        card.innerHTML = `<div class="vod-poster">▶</div><div style="font-weight:bold;">${m.title}</div><div style="font-size:12px; color:var(--magenta); margin-top:4px;">${m.info}</div>`;
+        card.onclick = () => { openTab('live', document.querySelector('.nav-btn')); playStream({ number: 200+i, name: m.title, epg: m.info, url: m.url }); };
+        movBox.appendChild(card);
+      });
+
+      const serBox = document.getElementById("series-container");
+      serBox.innerHTML = "";
+      series.forEach((s, i) => {
+        const card = document.createElement("div");
+        card.className = "vod-card focusable";
+        card.tabIndex = 0;
+        card.innerHTML = `<div class="vod-poster">🍿</div><div style="font-weight:bold;">${s.title}</div><div style="font-size:12px; color:var(--cyan); margin-top:4px;">${s.info}</div>`;
+        card.onclick = () => { openTab('live', document.querySelector('.nav-btn')); playStream({ number: 300+i, name: s.title, epg: s.info, url: s.url }); };
+        serBox.appendChild(card);
+      });
+    }
+
+    function openTab(tabName, btn) {
+      document.querySelectorAll(".section").forEach(s => s.classList.remove("active"));
+      document.getElementById("tab-" + tabName).classList.add("active");
+      document.querySelectorAll(".sidebar .nav-btn").forEach(b => b.classList.remove("active-tab"));
+      if (btn) btn.classList.add("active-tab");
+    }
+
+    function toggleEpg() {
+      const el = document.getElementById("epg-overlay");
+      el.style.display = el.style.display === "block" ? "none" : "block";
+    }
+
+    function goFullScreen() {
+      const v = document.getElementById("tv-player");
+      if (v.requestFullscreen) v.requestFullscreen();
+    }
+
+    function parseM3UContent(content) {
+      const lines = content.split("\n");
+      const parsed = [];
+      let currentName = "Canal M3U";
+      let num = 1;
+
+      for (let line of lines) {
+        line = line.trim();
+        if (line.startsWith("#EXTINF:")) {
+          const parts = line.split(",");
+          currentName = parts[parts.length - 1].trim() || `Canal ${num}`;
+        } else if (line.startsWith("http")) {
+          parsed.push({ number: num++, name: currentName, epg: "Ao Vivo via M3U", url: line });
+        }
+      }
+
+      if (parsed.length > 0) {
+        channels = parsed;
+        renderAll();
+        openTab("live", document.querySelector(".nav-btn"));
+        playStream(channels[0]);
+        alert(`Sucesso! ${parsed.length} canais carregados na sua TV.`);
+      } else {
+        alert("Nenhum canal válido encontrado na lista M3U.");
+      }
+    }
+
+    async function loadCustomM3UUrl() {
+      const url = document.getElementById("m3u-url").value.trim();
+      if (!url) return alert("Cole um link M3U primeiro!");
+      try {
+        const res = await fetch(url);
+        const text = await res.text();
+        parseM3UContent(text);
+      } catch (e) {
+        alert("Não foi possível baixar direto do link por bloqueio de segurança do servidor da lista. Baixe o arquivo .m3u e use o botão abaixo para selecionar o arquivo!");
+      }
+    }
+
+    function loadLocalM3UFile(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => parseM3UContent(ev.target.result);
+      reader.readAsText(file);
+    }
+
+    let numBuffer = "";
+    let numTimer = null;
+    window.addEventListener("keydown", (e) => {
+      if (e.key >= "0" && e.key <= "9" && document.activeElement.tagName !== "INPUT") {
+        numBuffer += e.key;
+        document.getElementById("num-val").innerText = numBuffer;
+        document.getElementById("num-osd").style.display = "block";
+        clearTimeout(numTimer);
+        numTimer = setTimeout(() => {
+          const target = channels.find(c => c.number === parseInt(numBuffer));
+          if (target) playStream(target);
+          numBuffer = "";
+          document.getElementById("num-osd").style.display = "none";
+        }, 1600);
+      }
+    });
+
+    renderAll();
+    playStream(channels[0]);
+  </script>
+</body>
+</html>
